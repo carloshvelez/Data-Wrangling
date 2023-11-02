@@ -1,0 +1,2181 @@
+# Limpieza y procesado de datos
+
+```{r}
+library(tidyverse)
+library(dslabs)
+library(ggrepel)
+library(Lahman)
+library(rvest)
+```
+
+En este curso aprenderemos a:
+
+-   Importar datos en R desde diferentes formatos
+-   Scrape (raspar) datos.
+-   Limpiar los datos usando tidyverse.
+-   Procesar cadenas con expresiones regulares (regex)
+-   Procesar datos usando dplyr
+-   Trabajar con fechas y tiempo.
+-   Minar texto.
+
+Hasta ahora, los datos con los que hemos trabajado se han ofrecido como dataframes, estos datos ya están limpios. Los paquetes tidyverse asumen que los datos ya están limpios.
+
+Sin embargo, en un proyecto típico de ds es habitual que los datos estén en un archivo, base de datos o extraidos de un documento, página web, tweet o pdf.
+
+En estos casos, debemos importar a R y limpiar. Este proceso puede ser largo y complejo. A este proceso se le llama wrangling.
+
+## Importación de datos.
+
+### Importar desde hojas de cálculo
+
+Una de las formas más comunes de guardar bases de datos es a través de hojas de cálculo. Como esto es un cojunto de datos con columnas y filas, se necesita especificar cuando termina una columna o fila, lo que, a su vez, define la celda en la que cada valor individual se guarda.
+
+En un archivo de texto, normalmente una nueva fila es definida por un salta de línea (retorno de carro, enter), y una nueva columna con algún símbolo especial, por ejemplo una coma o un punto y coma.
+
+La primera fila suele contener el encabezado y es importante comprobar que lo hay.
+
+No todas las hojas de cálculo son archivos de texto. Por ejemplo, excel y googlesheets son archivos propietarios.
+
+A la hora de guardar, no se recomienda excel. En su lugar puede ser googlesheets.
+
+### Rutas y directorio de trabajo
+
+Para leer un archivo que ya está en el computador el primer paso es encontrar el archivo que contiene los datos y reconocer su ubicación.
+
+Para hacer este proceso es importante saber cuál es el directorio de trabajo en R, pues este es en el que va a guardar por defecto los archivos.
+
+se puede ver con el comando getwd(). y configurar con setwd()
+
+Una de las cosas que tienen las funciones de lectura de archivos es que, a menos que una ruta sea completamente especificada, buscarán el archivo o la ruta en el directorio de trabajo.
+
+Se recomienda tener todos los datos crudos dentro de un subdirectorio.
+
+Para saber el nombre de un archivo en un paquete r, usamos la función system.file
+
+```{r}
+system.file("extdata", package = "dslabs")
+```
+
+Para listar los archivos que hay en un directorio usamos list.files()
+
+```{r}
+list.files(system.file("extdata", package = "dslabs"))
+```
+
+Ahora que sabemos la localización de esos archivos, estamos listos para importarlos en R.
+
+Para hacer esto primero vamos a confimar el directorio de trabajo:
+
+```{r}
+getwd()
+```
+
+Allí es donde lo quiero guardar.
+
+Ahora vamos a crear la ruta completa, para concatenar la ruta y el nombre de archivo usamos la función file.path:
+
+```{r}
+NombreArchivo <- "murders.csv"
+Ruta <- system.file("extdata", package = "dslabs")
+RutaCompleta <- file.path(Ruta, NombreArchivo)
+RutaCompleta
+```
+
+ahora vamos a copiar el archivo con la función copy.file()
+
+```{r}
+file.copy(RutaCompleta, getwd())
+```
+
+Ahora tenemos el archivo en nuestra carpeta:
+
+```{r}
+list.files()
+file.exists(NombreArchivo)
+```
+
+### Paquetes readr y readxl
+
+readr es el paquete de tidyverse que incluye funciones para leer archivos guardados en spreadsheets guardadas en archivos de texto.
+
+incluye:
+
+-   read_table() Lee valores separados por espacios en blanco. Suelen tener sufijo txt
+
+-   read_csv() Lee valores separados por comas. Suelen tener sufijo csv
+
+-   read_csv2() Lee valores separados por punto y coma. Suelen tener sufijo csv
+
+-   read_txv() Lee valores separados por tabulacones. Suelen tener sufijo tsv
+
+-   read_delim() archivo de texto de formato general; se debe definir un delimitador. Suelen tener sufijo txt
+
+el paquete readexcel ofrece funciones para leer datos de msexcel:
+
+-   read_excel(). Autodetecta el formato. Sufijos xls y xlsx
+
+-   read_xls(). lee formato original. sufijo xls.
+
+-   read_xlsx(). Lee formato nuevo. sufijo xlsx.
+
+Los archivos de excel permiten tener varias hojas. La función excel_sheets() obtiene el nombre de las hojas en un archivo excel. El nombre puede ser pasado al sheet argumento en las funciones anteriores.
+
+Para saber qué función usar, podemos mirar el sufijo del archivo, pero esto no siempre es garantía, también se pueden leer las línas del archivo con la función read_lines()
+
+```{r}
+read_lines(NombreArchivo, n_max = 5)
+```
+
+Aquí podemos ver que es un archivo deliminado por comas y tiene encabezado, así que vamos usar la runción read_csv()
+
+```{r}
+datos <- read_csv(NombreArchivo)
+```
+
+No dice que el delimitador es una coma, que tiene tres vectores de caracter (state, abb y region) y tiene dos numéricos (population y total).
+
+El objeto que acabamos de importar es un tibble
+
+```{r}
+class(datos)
+```
+
+las funciones de importación de Rbase también permiten importar, pero crean dataframes.
+
+```{r}
+datos2 <- read.csv(NombreArchivo)
+class(datos2)
+```
+
+### Descargar archivos de internet
+
+Otro lugar común para obtener datos es la internet.
+
+Podemos descargarlos y leerlos o importarlos directamente desde internet.
+
+```{r}
+url <- ("https://raw.githubusercontent.com/rafalab/dslabs/master/inst/extdata/murders.csv")
+datos<-read_csv(url)
+```
+
+Se usa la url en vez de la ruta del directorio.
+
+Ahora, si se quiere descargar el archivo, se usal la función download.file() con la url y el nombre que tomará el archivo como argumentos.
+
+```{r}
+download.file(url, "murders_descargado.csv")
+```
+
+Un par de funciones importantes para estos casos es tmpdir() y tmpfile()
+
+Crean directorios y archivos con nombres poco probabiles.
+
+Esto nos permite crear un archivo temporal que después removeremos.
+
+```{r}
+nombre_temporal <- tempfile()
+download.file(url, nombre_temporal)
+datos3 <- read.csv(nombre_temporal)
+
+```
+
+Ahora podemos borrar el objeto temporal y trabajar con el objeto con el cual quedamos:
+
+```{r}
+file.remove(nombre_temporal)
+```
+
+## Limpieza de datos
+
+En una base de datos limpia, cada fila representa una observación y las columnas representan diferentes variables de la cual tenemos datos para esa observación.
+
+Miremos una base de dato que no tiene estas características
+
+```{r}
+ruta <- system.file("extdata", package = "dslabs")
+NombreArchivo <- file.path(ruta, "fertility-two-countries-example.csv")
+datos_ampliado <- read_csv(NombreArchivo)
+datos_ampliado
+```
+
+En este base de datos, que analiza tasas de fertilidad, cada año (lo que necesitamos sea nuestra observación), está en el lugar de las columnas (es decir variables) y lo contrario ocurre para los países.
+
+Esta base de datos introduce la diferencia entre un formato ampliado y un formato limpio. En el formato ampliado, cada fila incluye diferentes observaciones, y una de las variables, (año en este caso) se guarda en el encabezado.
+
+### Reshaping (remodelando) los datos.
+
+Para este tipo de casos, en el proceso de preparar los datos, tendremos que darles una nueva forma, en esto nos ayuda el paquete tidyr de tidyverse, a través de diferentes funciones.
+
+La función pivot_longer, convierte datos ampliados en datos tidy. Nótese que los datos tidys suelen ser más largos que anchos (tienen mayor número de observaciones que variables).
+
+```{r}
+pivot_longer(datos_ampliado, "1960":"2015")
+```
+
+Puesto que el país es la única columna que no está siendo pivoteada, obtenemos el mismo resultado si la restamos en el código:
+
+```{r}
+pivot_longer(datos_ampliado, -country)
+```
+
+Ahora, cada valor tiene un nombre de columna "value", y la columna que originalmente tenía el nombre, ahora pasa a ser una observación en una variable de nombre "names".
+
+Si queremos darle nombres más informativos, usamos los argumentos names_to y values_to
+
+```{r}
+pivot_longer(datos_ampliado, -country, names_to = "año", values_to = "Fertilidad")
+```
+
+Podemos hacer los mismo con pipe:
+
+```{r}
+datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año")
+```
+
+Hasta aquí todo bien, pero la función pivot_longer está asumiendo que los años son de tipo caracter, y los necesitamos de tipo numérico entero.
+
+```{r}
+class (datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año")%>%.$Año)
+```
+
+Para esto tenemos dos opciones. La larga es mutar la columna como numérica. La corta es usar un nuevo argumento en pivot_longer: names_transform.
+
+Larga:
+
+```{r}
+datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año") %>% mutate(Año = as.numeric(Año))
+```
+
+La corta:
+
+```{r}
+datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año", names_transform = list(Año = as.numeric))
+```
+
+Con los datos limpios, ahor podemos hacer un ggplot:
+
+```{r}
+datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año", names_transform = list(Año = as.numeric))%>%ggplot(aes(Año, Fertilidad, color = country))+geom_point()
+```
+
+### Convertir a datos anchos
+
+A veces es útil convertir los datos en formato ancho. La función pivot_wider es básicamente la opuesta a pivot_longer().
+
+```{r}
+formato_tidy <- datos_ampliado %>% pivot_longer(-country, values_to = "Fertilidad", names_to = "Año", names_transform = list(Año = as.numeric))
+
+formato_ancho <- pivot_wider(formato_tidy, names_from = Año, values_from = Fertilidad)
+
+formato_ancho
+```
+
+### Separar
+
+Podemos pensar en datos organizados de manera más compleja y difícil de preparar. Por ejemplo, miremos un dataset con dos variables:
+
+```{r}
+ruta <- system.file("extdata", package = "dslabs")
+NombreArchivo <- "life-expectancy-and-fertility-two-countries-example.csv"
+filename <- file.path(ruta, NombreArchivo)
+
+datos_brutos = read_csv(filename)
+
+datos_brutos
+
+```
+
+Aquí tenemos de nuevo el formato ancho, pero hay dos variables: fetilidad y esperanza de vida, cada una en columnas diferentes.
+
+Podemos empezar con pivotlonger sin especificar nombres:
+
+```{r}
+datos_por_separar <- pivot_longer(datos_brutos, -country)
+```
+
+Aquí tenemos dos variables en filas, y las necesitamos en columnas, así que aún es necesario hacer más trabajo.
+
+Nuestro primer reto es tomar los valores en la columna name, y separar el año del tipo de variable.
+
+La función separate nos ayuda con esto. separate(nombre de la columna a separar, nombres a usar para las nuevas columnas, y el caracter que separa los nombres de las columnas)
+
+```{r}
+datos_por_separar %>% separate(name, c("Año", "Nombre"), sep = "_")
+```
+
+Para convertir los años a numérico, pasamos a TRUE el argumento convert
+
+```{r}
+datos_separados <- datos_por_separar %>% separate(name, c("Año", "Nombre"), sep = "_", convert = TRUE)
+```
+
+El error que aparece, se debe a que hay otro guion bajo que separa las pabras life y expetancy, así: life_expectancy. Para abordarlo, usamos otro argumento: fill="right". Lo que nos permite hacer esto, es que si encuentra otra palabra separada por guión bajo, la ponga en una nueva columna, de lo contrario, lo rellene con un NA. Esto implica que debemos agregar otro nombre a la lista de estos
+
+```{r}
+datos_separados1 <- datos_por_separar %>% separate(name, c("Año", "Nombre_1", "Nombre_2"), sep = "_", fill = "right", convert = TRUE)
+```
+
+Una aproximación mejor es juntar (merge) las últimas dos palabras cuando hay una separación extra. Así que escribimos extra = "merge" y no escribimos el nuevo nombre en la lista de estos:
+
+```{r}
+datos_separados2 <- datos_por_separar %>% separate(name, c("Año", "Nombre"), sep = "_", extra = "merge", convert = TRUE)
+datos_separados2
+```
+
+Ahora, lo que podemos hacer, es simplemente hacer un pivot_larger, para convertir esta columna Nombre en dos columnas:
+
+```{r}
+pivot_wider(datos_separados2, names_from = "Nombre", values_from="value")
+```
+
+Si queremos hacer todo en una sola línea, pero tenemos que asegurarnos de llamar "name" a una de las columnas:
+
+```{r}
+datos_separados2 <- datos_por_separar %>% separate(name, c("Año", "name"), sep ="_", extra = "merge", convert = TRUE) %>%pivot_wider()
+
+datos_separados_final
+```
+
+### Unir
+
+A veces es útil hacer el proceso inverso de separate: unir dos columna en una.
+
+```{r}
+datos_separados1%>%unite("nombre", c("Nombre_1", "Nombre_2"), sep ="_")
+```
+
+Luego podemos hacer spread de las columnas:
+
+```{r}
+datos_separados1%>%unite("nombre", c("Nombre_1", "Nombre_2"), sep ="_")%>%spread(nombre, value) %>% rename(fertility = fertility_NA)
+```
+
+## Combinar tablas
+
+La información que tenemos para un análisis dado, podría no estar en una sola tabla.
+
+Uno de los mayores retos es que el orden o la cantidad de datos no necesariamente son los mismos en las tablas que deseamos unir.
+
+Por ejemplo, las siguientes no coinciden:
+
+```{r}
+data("polls_us_election_2016")
+data ("murders")
+
+identical(results_us_election_2016$state, murders$state)
+```
+
+Las funciones join del paquete dplyr, que están basadas en los join de sql, se asegura de que las tablas se combinen de tal forma que las filas coincidan.
+
+La idea general es que se necesita identificar una o más columnas que contienen la información necesaria para hacer coincidir las dos tablas. Luego, se retorna una nueva tabla combinada.
+
+Nótese lo que ocurre si unimos las dos tablas, por estado, usando left_join()
+
+```{r}
+left_join(murders, results_us_election_2016, by= "state")
+```
+
+Con esto ya puedo hacer los trabajos que necesite, por ejemplo, gráficos:
+
+```{r}
+left_join(murders, results_us_election_2016, by= "state") %>%
+  ggplot(aes(population/10^6, electoral_votes, label =abb))+
+  geom_point()+
+  geom_text_repel()+
+  scale_x_continuous(trans ="log2")+
+  scale_y_binned(trans = "log2")+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+Sin embargo, en la práctica, no siempre cada celda en una tabla, tiene otra correspondiente en la segunda tabla. Por esta razón hay varias formas de unir. Para esto vamos a crear dos tablas:
+
+```{r}
+tab1 <- slice(murders, 1:6) %>% select(state,population)
+tab1
+
+tab2 <- slice(results_us_election_2016, c(1:3, 5, 7:8))%>%
+  select(state, electoral_votes)
+tab2
+```
+
+En estas tablas, los estados de ambas son diferentes. Vamos a usar diferentes tipos de join.
+
+### left_join:
+
+Queremos una tabla como la tab1, pero adicionando cualquier información acerca de los estados en tab2. Usamos left_join con tab1 como primer argumento:
+
+```{r}
+left_join(tab1, tab2, by="state")
+```
+
+Nótese que agrega los datos disponibles y los demás los deja como NA.
+
+El primer argumento se puede usar a través de pipe:
+
+```{r}
+tab1 %>% left_join(tab2, by="state")
+```
+
+### right_join:
+
+Si queremos una tabla como la segunda, entonces usamos righ_join, con la primera como primer argumento:
+
+```{r}
+right_join(tab1, tab2, by="state")
+```
+
+Nótese que conservó los datos de la tabla dos, y agregó los disponibles en la tab1
+
+### Inner_join:
+
+Lo usamos para mantener únicamente las filas que tienen información en ambas tablas:
+
+```{r}
+inner_join(tab1, tab2, by="state")
+```
+
+Nótese que sólo dejó las filas que contenían información en ambas tablas.
+
+### full_join:
+
+Queremos los datos de ambas tablas, dejando los datos faltantes como na.
+
+```{r}
+full_join(tab1, tab2, by="state")
+```
+
+### semi_join y anti_join:
+
+Ambas funciones permiten mantener partes de una tabla dependiendo de lo que hay en la otra.
+
+La función semi_join permite mantener la parte de tab1 para la que tenemos información en tab2. No agrega las columnas de la segunda:
+
+```{r}
+semi_join(tab1, tab2)
+```
+
+Nótese que sólo dejó la información de California, que es el único estado para el que tenemos información en la tab2. Es como si eliminara aquellos datos que, se sabe, no tendrán contraparte en tab2.
+
+Anti_join hace lo opuesto a semi_join: deja en tab1 la información para la cual no hay contraparte en tab2. Por ejemplo, en la siguiente tabla esperamos ver información para los estados diferentes a California.
+
+```{r}
+anti_join(tab1, tab2)
+```
+
+Para recordar, podemos hacer uso del siguiente diagrama:
+
+![](Captura%20de%20pantalla%202022-06-28%20110544.png)
+
+## Binding (uniendo)
+
+Las funciones de unión no intentan hacer coincidir tablas (como join), sino simplemente combinarlas.
+
+Si los datasets a unir no coinciden en las dimensiones apropiadas, obtendremos un error.
+
+La función de dplyr bind_cols une dos objetos poniendo las columnas unas al lado de las otras en un tibble.
+
+Por ejemplo, aquí tenemos dos vectores:
+
+```{r}
+a <- 1:3
+b <- 4:6
+```
+
+Ahora los podemos unir con bind_cols:
+
+```{r}
+bind_cols(a,b)
+```
+
+Es necesario tener en cuenta que le podemos asignar directamente los nombres a las columnas, así:
+
+```{r}
+bind_cols(a=a, b=b)
+```
+
+Asignar nombres se hace cuando unimos vectores, pero si uniéramos dataframes no sería necesario.
+
+En R base está la función cbind, que hace la misma función, pero no creta tibbles, sino matrices o dataframes:
+
+```{r}
+cbind(a,b)
+```
+
+Ahora probemos bind_cols() con dataframes.
+
+Aquí voy a unir datos2 y datos3, las columnas son equivalente, así que veremos columnas con datos iguales:
+
+```{r}
+bind_cols(datos2, datos3)
+```
+
+Ahora creemos diferentes tablas y luego unámoslas:
+
+```{r}
+tabla1 <- datos_ampliado[,1:10]
+tabla2 <- datos_ampliado[, 11:20]
+tabla3 <- datos_ampliado[, 21:30]
+
+
+```
+
+Ahora tenemos tres dataframe. Es tan sencillo como unirlos:
+
+```{r}
+bind_cols(tabla1, tabla2, tabla3)
+```
+
+Nótese que los nombres permanecieron.
+
+La función de bind_rows es similar, pero en vez de columnas, une filas.
+
+Para eso, creemos nuevamente tres tablas, pero esta vez separando las filas:
+
+```{r}
+tabla4 <- datos2[1:10,]
+tabla5 <- datos2[11:20,]
+tabla6 <- datos2[21:30,]
+```
+
+Ahora tenemos tres tablas y podemos unirlas por filas:
+
+```{r}
+bind_rows(tabla4, tabla5, tabla6)
+```
+
+También podríamos usar rbind, teniendo en cuenta que no nos arrojará un tibble:
+
+```{r}
+rbind(tabla4, tabla5, tabla6)
+```
+
+También es importante tener en cuenta que si los nombres de columnas no coinciden, nos arrojará datos vacios en el caso de bind_rows() y error en el caso de rbind.
+
+```{r}
+bind_rows(tabla1, tabla2, tabla3)
+rbind(tabla1, tabla2, tabla3)
+```
+
+En bind_rows podemos agregar el argumento .id para identificar de qué tabla viene cada columna:
+
+```{r}
+bind_rows(tabla4, tabla5, tabla6, .id="tabla")
+```
+
+## Operadores de conjuntos (set operators)
+
+Otro conjunto de funciones útiles son los operadores de conjuntos. Cuando se aplican a vectores, se comportan como lo hacen los conjuntos: unión, entesección, etc. Con tidyverse (dplyr), estas funciones pueden ser usadas con dataframes enteros, y no solamente con vectores, como en Rbase.
+
+### Intersect()
+
+Podemos tomar la intersección intersect() de vectores numéricos (es decir, los números que están en los sets 1 y 2. Por ejemplo, en el vector 1:100 y en el vector 50:150, los intersectos son los números del 50 al 100:
+
+```{r}
+intersect (1:100, 50:150)
+```
+
+Lo mismo ocurre con vectores de caracteres
+
+```{r}
+intersect(c("a", "b", "c", "d"), c("c", "d", "e", "f"))
+```
+
+con dplyr cargado, podemos hacer lo mismo con datasets, la condición es que tengan el mismo nombre de columnas. Nos arrojará las filas que contengan exactamente la misma información en cada columna:
+
+```{r}
+tabla7 <- datos2[1:10,]
+tabla8 <- datos2[6:16,]
+
+intersect(tabla7, tabla8)
+```
+
+Si los datos no coinciden, nos arrojará un dataset vacío.
+
+```{r}
+intersect(tabla6, tabla7)
+```
+
+Si el número de columnas no coincide, nos arrojará un error.
+
+```{r}
+intersect(tabla1, tabla7)
+```
+
+### union()
+
+Toma la unión, es decir que une los elemenos del vector o, con dplyr, dataframe.
+
+```{r}
+union(1:5, 5:15)
+```
+
+Nótese que la unión implica que los números que se repiten sólo los tomará una vez.
+
+Para dataframes:
+
+```{r}
+union(tabla8, tabla7)
+```
+
+Las tablas 7 y 8 tienen un total de 21 filas, pero aquí sólo muestra 16, eso se debe a que las repetidas sólo las muestra una vez.
+
+###setdiff()
+
+Esta función elige que sólo están en el primer dataframe, pero no en el segundo. Por ejemplo:
+
+conjunto 1: 1, 2, 3, 4. Conjunto 2: 4, 5, 6, 7.
+
+En el conjunto 1 tenemos como elementos únicos (que no están en el cojunto 2, el 1, el 2 y el 3. Esos son los números que nos arrojará:
+
+```{r}
+setdiff(1:4, 4:7)
+```
+
+Si quisiéramos evaluar el conjunto 2, tendremos que ponerlo en primer lugar:
+
+```{r}
+setdiff(4:7, 1:4)
+```
+
+Con los dataframes ocurre lo mismo:
+
+```{r}
+setdiff(tabla7, tabla8)
+```
+
+Nos arrojó los datos únicos del conjunto 1.
+
+```{r}
+setdiff(tabla8, tabla7)
+```
+
+Nos arrojó los datos únicos del conjunto 2.
+
+Lo anterior implica que esta función no es simétrica.
+
+##setequal()
+
+Nos indica si un set es igual, independientemente del orden.
+
+```{r}
+setequal(1:5, 1:6)
+setequal(1:5, 5:1)
+```
+
+En el primer caso no eran iguales, por lo tanto es falso, en el segundo caso, ambos conjuntos tenían los mismos elementos, aunque estuvieran desordenados; nos marcó igual.
+
+Creemos una tabla 9, con los mismos elementos que la 8, pero en orden inverso. y veremos qué pasa:
+
+```{r}
+tabla9 <- tabla8[rank(tabla8$population), 5:1]
+```
+
+Ahora intentemos establecer igualdad:
+
+```{r}
+setequal(tabla8, tabla9)
+```
+
+Aunque las tablas lucen muy diferentes, debido a que las columnas y las filas tienen orden diferente, nos arroja que es igual.
+
+Miremos uno diferente:
+
+```{r}
+setequal(tabla7, tabla8)
+```
+
+## Web scrapping
+
+Buena parte de los datos no están en una base organizada. Podría estar en una página web.
+
+web scrapping o web harvesting (cosecha), es el proceso de extraer datos de un sitio web. Esto lo podemos hacer debido a que la información que usa el navegador para presentarnos la página web es un archivo de texto que recibimos de un servidor.
+
+El texto está en formato HTML (lenguaje de hipertexto etiquetado). De hecho, fácilmente se puede ver el código html desde el navegador.
+
+En tanto este código es accesible, se puede desargar, cargarlo en r y extraer en linformación de la página web.
+
+Parece una tarea compleja debido a la aparente complejidad del html, pero es posible utilizar algunas herramientas para facilitar el proceso.
+
+También se pude hacer uso del CSS.
+
+Hay un paquete que hace parte de tidyverse, cuyo nombre es rvest y permite hacer este trabajo.
+
+Por ejemplo, vamos a obtener una tabla de tasa de homicidios en Colombia desde wikipedia:
+
+```{r}
+url <- "https://es.wikipedia.org/wiki/Anexo:Departamentos_y_municipios_de_Colombia_por_tasa_de_homicidio_intencional"
+
+contenido <- read_html(url)
+```
+
+Todos los datos de esa página web están ya en este objeto de wikipedia. Su clase es xml_document:
+
+```{r}
+class(contenido)
+```
+
+De hecho, el paquete rvest es más general, pues lee documentos xml.
+
+xml es general y puede ser usado para representar cualquier tipo de páginas, html es un tipo de xml.
+
+Ahora bien, no hay mucho que ver en ese objeto.
+
+En HTML el contenido suele estar entre un mayor que y un menor que \>contenido\< Eso se debe a que en html primero se indica la etiqueta. Por ejemplos <h1>contenido</h1>
+
+A esto se le denominan **nodos**
+
+El paquete rvest contiene funciones para extraer nodos de páginas html.
+
+La función html_elements("tipo de elemento") extrae el contenido del tipo de nodo solicitado. Por ejemplo html_elements(x, "table") extraerá los elementos "table" del objeto.
+
+```{r}
+html_elements(contenido, "table")
+```
+
+También se puede usar con pipe:
+
+```{r}
+contenido %>% html_elements("table")
+```
+
+La función html_element(x, "tipo de elemento") extrae el primer elemento:
+
+```{r}
+contenido%>%html_element("table")
+```
+
+Esto aún no está convertido en tabla (por ahora son un grupo de nodos de tipo tabla). Podemos hacerlo fácilmente gracias a rvest, con la función html_table().
+
+```{r}
+tablas <- contenido%>%html_elements("table")%>%html_table()
+```
+
+Ahora tengo las tablas de toda la información en tablas, sobre homicidios en Colombia, que había en esa página web:
+
+```{r}
+tablas
+```
+
+Sin embargo, estas tablas están en caracteres y tienen una coma en vez de un punto, lo cual hace difícil la conversión. Se soluciona con un par de parámetros adicionales:
+
+```{r}
+contenido %>%html_elements("table")%>%html_table(dec = ",")
+```
+
+En el anterior, para la segunda tabla no hizo correctamente la conversión debido a que las unidades de mil están separadas por espacios.
+
+### Selector gadget
+
+Se trata de una extensión de chrome que muestra el tipo de elemento html o css que permite hacer el parsing con html_select(). La extensión nos arroja el nombre del elemento css que contiente la información, y la usamos para guardarla.
+
+Por ejemplo, voy a seleccionar información general, ingredientes, instrucciones y tips para esta página web: <https://www.recetasnestle.com.co/recetas/sandwich-de-atun-y-manzana>
+
+```{r}
+url <- "https://www.recetasnestle.com.co/recetas/sandwich-de-atun-y-manzana"
+
+receta <- read_html(url)
+info_gral <- html_elements (receta,".col-infos")
+ingredientes <- html_elements(receta, ".col-ingredients")
+instrucciones <- html_elements(receta, ".col-instructions")
+tips <- html_elements(receta, ".col-general-tips")
+
+
+```
+
+Aquí ya tengo información en html; la función html_text() permite dejar únicamente el texto. html_text2() procesa mejor para preparar para la base de datos:
+
+```{r}
+html_text2(ingredientes)
+```
+
+Si es necesario, se puede hacer split: Ahora se puede hacer split de los textos con strsplit()
+
+```{r}
+bb <- strsplit(html_text2(ingredientes), "\n")
+```
+
+Todas estas funciones las puedo trabajar desde una sola función y con pipe:
+
+```{r}
+leer_receta <- function(url){
+  receta <- read_html(url)
+  nombre_receta <- html_elements(receta, ".secondary-font")%>%html_text2()
+  info_gral <- html_elements (receta,".col-infos")%>%html_text2()
+  ingredientes <- html_elements(receta, ".col-ingredients") %>%html_text2()
+  instrucciones <- html_elements(receta, ".col-instructions")%>%html_text2()
+  #tips <- html_elements(receta, ".col-general-tips")%>%html_text2()
+  data.frame(nombre_receta, info_gral,ingredientes, instrucciones)
+}
+```
+
+Ahora, puedo rascar varias recetas de esa misma página:
+
+```{r}
+leer_receta("https://www.recetasnestle.com.co/recetas/sandwich-de-atun-y-manzana")
+
+
+```
+
+```{r}
+leer_receta("https://www.recetasnestle.com.co/recetas/deditos-de-robalo-apanados")
+```
+
+```{r}
+leer_receta("https://www.recetasnestle.com.co/recetas/trufas-de-galletas")
+```
+
+## Procesamiento de texto
+
+A menudo necesitamos extraer números que están en cadenas (para hacer cálculos y plots). También requerimos organizar y procesar textos en nombres de variables significtivas o en variables categóricas. 
+la función parse_number() ayuda en la mayoría de situaciones. 
+Vamos a buscar hacer varias actividades, tales como: 
+- Remover caracteres indeseados. 
+- Extraer valores numéricos. 
+- Encontrar y reemplazar caracteres. 
+- Extraer partes específicas de texto. 
+- Convertir textos en forma libre a formatos más uniformes. 
+- Separar cadenas en múltiples valores. 
+
+El paquete que estaremos usando es de tidyverse y se llama stringr, el cual contiene muchas funciones que empiezan por (str_nombre_función)
+```{r}
+url <- "https://en.wikipedia.org/w/index.php?title=Gun_violence_in_the_United_States_by_state&direction=prev&oldid=810166167"
+murders_raw <- read_html(url) %>% 
+  html_nodes("table") %>% 
+  html_table() %>%
+  .[[1]] %>%
+  setNames(c("state", "population", "total", "murder_rate"))
+
+# inspect data and column classes
+head(murders_raw)
+class(murders_raw$population)
+class(murders_raw$total)
+
+```
+Aquí ya tenemos la tabla con los asesinatos, desde wikipedia, ahora vamos a hacer algunas transformaciones. 
+
+### Definiendo las cadenas
+Para definir cadenas, podemos usar comillas dobles "" o comillas sencillas ''. El problema es que ambas no son equivalentes, así que "variable" no es igual a 'variable'.
+Si el caracter usa doble comillas, no podemos usar también dobles comillas. Por ejemplo diez pulgadas 10", requiere que se usen comillas simples para su definición '10"'
+Lo mismo para para 5', tendremos que usar "5'"
+para escribir 5 piez y diez pulgadas 5'10", no podremos usar ninguna de estas opciones. Para esto, es necesario usar el caracter scape \, con el fin de indicarle al programa que la comilla que viene hace parte del texto: así: 
+'5\'10"'
+
+Para estar seguros, podemos usar la función cat(), la cual permite ver cómo luce una cadena. 
+
+```{r}
+variable = '10"'
+variable2 = '5\'10"'
+variable3 = "5'10\""
+cat(variable3)
+```
+
+
+### El paquete stringr
+
+El procesamiento de cadenas incluye una cadena y un patrón. 
+En el conjunto de datos dataframe_raw, la columna de población es un patrón. 
+La convención usual para convertir a números no funciona aquí: 
+```{r}
+as.numeric(murders_raw$population)
+```
+
+Esto se debe a las comas. 
+
+Para lograr cualquier tipo de procesamiento de cadenas debemos seguir, casi siempre, las etapas del procesamiento: 
+
+#### Etapas del procesamiento de cadenas: 
+1. Detectar el patrón.
+2. Localizar el patrón. 
+3. Extraer o reemplazar la cadena.
+
+En este ejemplo: 
+1. Detectar el patrón: Las unidades de mil están señaladas por una coma (así se suele usar en los sitios web por legibilidad).
+2. Localizar el patrón: Se encuentra en todas las entradas de la columna población. 
+3. Reemplazar: Vamos a eliminar la coma (reemplazarla por un caracter vacío).
+
+Rbase tiene funciones para estas tareas, pero no sigue una convención unificada, lo cual lo hace más difícil de memorizar y usar. stringr reempaqueta estas funciones, usando un enfoque más consistente en el nombramiento y el ordenamiento de los argumentos. 
+
+Por ejemplo, en stringr todos las funciones inician con str_, lo que facilita que Rstudio autocomplemente y muestre ayuda. 
+Otra ventaja es que la cadena es siempre el primer argumento de estas funciones, lo cual hace muy fácil usar el pipe. 
+
+### Estudio de caso 1: Murders Data
+En este ejemplo sencillo, vamos a convertir los datos que están en cadena, en el dataset murders_raw, a datos numéricos. 
+la función str_detect() ayuda a detectar cadenas o patrones: 
+
+```{r}
+str_detect("Hola", "H")
+```
+
+Para aplicar esta función a todas las columnas del dataset, vamos a encapsularla en una función que detecte si alguna entrada tiene comas: 
+
+```{r}
+tiene_comas <- function(x) any(str_detect(x, ","))
+tiene_comas(murders_raw$population)
+```
+
+Ahora vamos a aplicarlo a todas las columnas mediante la función summarize_all()
+
+```{r}
+murders_raw%>%summarize_all(funs(tiene_comas))
+```
+
+Summarize_all se enseña en el curso pero la documentación dice que el desarrollo está completo, y recomiendan across: 
+```{r}
+murders_raw%>%summarize(across(.fns = tiene_comas))
+```
+
+Ahora que sebemos cuáles tienen coma, podemos probar cómo nos va reemplazándola con un caracter vacío, con la función str_replace_all()
+```{r}
+prueba1 <- str_replace_all(murders_raw$population, ",", "")
+prueba1
+```
+
+Aquí podemos ver que nos lo reemplazó y ahora tenemos los números únicamente. Ahora podemos mutarlo en todos: 
+
+Esta operación es muy común, por lo que se dispone de una función que lo hace automáticamente: parse_number():
+
+```{r}
+parse_number(murders_raw$population)
+```
+
+Ahora podemos aplicar esta función en las columnas que nos interesan: 
+
+
+```{r}
+murders_raw%>%mutate(across(.cols =2:3, .fns = parse_number))
+```
+
+Nótese que esa es la función nueva, la que enseñan en el curso es: 
+
+```{r}
+murders_raw%>%mutate_at(2:3, parse_number)
+```
+
+### Ejemplo con los homicidios en Colombia. 
+
+Ahora hagamos el mismo proceso con los homicidios en Colombia. Primero, miremos cuáles columnas tienen caracteres con coma: 
+```{r}
+homicidios_colombia <- as.data.frame(tablas[1])
+homicidios_colombia %>% summarize(across(.fns = tiene_comas))
+```
+Podría hacerlo con el reemplazo: 
+
+```{r}
+homicidios_colombia$Tasa.de.homicidio..hombres. <- as.character(str_replace_all(homicidios_colombia$Tasa.de.homicidio..hombres., ",", "."))
+homicidios_colombia
+```
+
+Sin embargo, la función parse_number ya vismos que me sirve para ese mismo cometido: 
+
+```{r}
+homicidios_colombia <- as.data.frame(tablas[1])
+homicidios_colombia %>%mutate(across(2:4, .fnc=parse_number))
+```
+
+Incluso, habíamos visto que desde que se convierte la tabla, desde el elemento html, se puede indicar que el decimal es una coma: 
+
+```{r}
+tablas_homicidio <- contenido%>%html_elements("table") %>% html_table(dec = ",", fill = TRUE)
+homicidios_colombia <- as.data.frame(tablas_homicidio[1])
+homicidios_colombia
+```
+
+No obstante, vimos que había una tabla con dificultades, pues tenía un espacio que que impedía que una de las columnas fueran bien convertidas: 
+
+```{r}
+homicidios_colombia2 <- as.data.frame(tablas_homicidio[2])
+homicidios_colombia2 %>% mutate(Número.de.homicidios..2019. = str_replace_all(Número.de.homicidios..2019., "\\p{WHITE_SPACE}", ""),
+                                Número.de.homicidios..2019. = as.numeric(Número.de.homicidios..2019.))
+```
+Finalizamos poniendo nombres más bonitos a las columnas (Esto es lo primero que debí hacer)
+```{r}
+colnames(homicidios_colombia2) <- c("Departamento", "N_Homicidios_2019", "Tasa_Homicidios_2016")
+homicidios_colombia2
+```
+
+## Alturas reportadas
+
+Podemos acceder a los datos brutos de las alturas reportadas con las que ya trabajamos en otro curso: 
+```{r}
+data("reported_heights")
+reported_heights
+```
+
+Los datos que ingresaron los estudiantes, a través de un aplicativo web, fueron diversos, la mayoría ingresó las alturas en pulgadas, otros con palabras, otros con pies, otros con centímetros. 
+
+Si intentamos hacer parse_number(), obtenemos un aviso de que se generan datos nulos. Además, convierte cms y pies en números equivalentes, lo cual no es útil. 
+
+```{r}
+head(as.numeric(reported_heights$height))
+```
+
+En total, hay 81 datos nulos: 
+```{r}
+sum(is.na(as.numeric(reported_heights$height)))
+```
+
+Para ver esos datos, podemos filtrarlos: 
+```{r}
+reported_heights %>% mutate (nueva_altura = as.numeric(height))%>%filter(is.na(nueva_altura))
+```
+
+Podríamos descartar estos datos y continuar, pero también podríamos convertir estos datos de tal manera que se puedan usar en el análisis: 
+Si seguimos la secuencia para procesar cadenas, ya pudimos localizarlas, ahora vamos a identificar patrones: 
+Para 5'4" sabemos que se trata de 5 pies y 4 pulgadas. Lo mismo para 5'4. Para convertir esto a pulgadas, tendremos que multiplicar el número de pies por 12 y luego sumar las pulgadas. Para 5'4", es 5*12 + 4 = 60+4 = 64 pulgadas. 
+
+Frente a estos casos, necesitamos identificar estos patrones y definirlos. Entre más entradas compartan el mismo patrón, mucho mejor, porque podemos arreglar más entradas con el mismo código. 
+
+Para identificar los patrones, siempre es útil remover las entradas que son consistentes con el tipo de datos que queremos (en este caso pulgadas) y mirar únicamente las entradas problemáticas. Para este caso, podemos mirar las entradas que arrojan nulos cuando intentamos convertir a numéricos y, adicionalmente, aquellas que arrojan valores que no son esperables para los datos (en este caso, alturas plausibles, entre 50 y 84 pulgadas). 
+Vamos a crear una función para esto: 
+```{r}
+no_pulgadas <- function(x, pequeño = 50, grande = 84){
+  pulgadas <- suppressWarnings(as.numeric(x))
+  ind <- is.na(pulgadas) | pulgadas < pequeño | pulgadas > grande
+  ind
+}
+```
+
+La función anterior elimina las alertas que por defecto arroja R y devuelve los índices de los datos que cumplen con los criterios: no na y entre las alturas elegidas. Si aplicamos esta función, podemos obtener los resultados que queremos: 
+```{r}
+reported_heights %>% filter(no_pulgadas(height))
+```
+
+Ahora tenemos 292 casos que no cumplen con nuestros criterios. 
+Si evaluamos todas las entradas cuidadosamente, observamos varias cosas: 
+1. Algunas están ingresadas como texto. 
+2. Otras tienen números en centenas, lo cual equivale a centímetros. 
+3. Otras separan los pies y las pulgadas de diferentes maneras, con ', con " y con puntos. 
+4. Otras tienen números muy grandes o muy pequeños. 
+
+Vamos a mirar varias formas de acercarnos a este problema: 
+
+### Expresiones regulaes. 
+Vamos a converitr algunos de estos patrones en datos estandarizados y luego vamos a convertirlos en pulgadas. 
+Las expresiones regulares nos permiten detectar estos patrones y extraer las partes que queremos. 
+Una expresión regular es una forma de expresar patrones de caracteres de texto. Gracias a estas podemos determinar si una cadena coincide con el patrón. 
+Para hacer esto, se debe seguir un conjunto de reglas. 
+Los patrones que se aplican a las funciones de strngr pueden ser regex. 
+Técnicamente, cualquier cadena es una regex. Por ejemplo, la cadena "cm" es una expresión regular: 
+```{r}
+str_subset(reported_heights$height, "cm")
+```
+
+Veamos varios ejemplos para detectar patrones: 
+
+```{r}
+si <- c("180 cm", "140 cm", "32 pulgadas", "45 pulgadas")
+no <- c ("180", "45'")
+todas <- c(si, no)
+
+str_detect(todas, "cm") | str_detect (todas, "pulgadas") #detecta si cumplen uno u otro patrón. 
+str_detect(todas, "cm") & str_detect(todas, "pulgadas") # detecta si cumple ambos patrones. 
+```
+
+Sin embargo, con regex no tenemos que hacerlo tan largo, el símbolo | lo podemos meter en la misma función. 
+```{r}
+str_detect(todas, "cm|pulgadas")
+str_detect(todas, "cm&pulgadas")
+```
+
+#### //d
+este símbolo permite identificar patrones en los que haya cualquier dígito, por ejemplo: 
+
+```{r}
+si <- c("5", "6", "7'", '8\'5"', " 4", "55")
+no <- c("", ".", "cinco", "seis")
+s <- c(si, no)
+patron <- "\\d"
+str_detect(s, patron)
+```
+
+Si queremos saber cuál es el primer match en la cadena, usamos la función str_view(cadena, patron). Si queremos ver todos los match, usarmos str_view_match()
+
+```{r}
+str_view_all(s, patron)
+str_view(s, patron)
+```
+
+#### Clases, anclas y cuantificadores. 
+
+Las clases de caracter, permiten definir un conjunto de caracteres que pueden coincidir. 
+Las definimos con corchetes así []
+
+```{r}
+str_subset(s, "[45s]")
+str_subset(s, "[4-8]")
+```
+
+Escribir [1-30] en regex es equivalente a que encuentre el patrón 1,2,3,0
+
+Las anclas permiten restringir el patrón. Por ejemplo, si sólo quiero que me identifique cadenas que empiecen o terminen con un caracter específico. 
+
+^es un ancla para especificar el inicio de una cadena. Por ejemplo ^\\d busca las cadenas que inicien con un dígito
+```{r}
+str_subset(s, "^\\d")
+```
+
+$ es un ancla para especificar el final de una cadena. Si quiero saber si alguna. 
+
+```{r}
+str_subset(s, "[a-z']$")
+```
+
+Si quiero cadenas que empiecen por un dígito y terminen en este (es decir, con un sólo dígito), escribo: 
+
+```{r}
+str_subset(s, "^\\d$")
+```
+
+Los cuantificadores permiten especificar el número de veces que puede aparecer un caracter. 
+si queremos que un número aparezaca una o dos veces, escribimos \\d{1,2}
+```{r}
+str_subset(s, "\\d{1,2}")
+str_subset(s, "^\\d{1,2}") ## diferente al anterior porque aquí le pedimos que debía iniciar con el dígito. " 4" no inicia con el dígito
+str_subset(s, "\\d{1}")
+str_subset(s, "^\\d{1,2}$") ## que sólo tengan uno o dos dígitos.
+```
+
+Con esto, ya podemos hacer un patrón que nos permita identificar los pies y las pulgadas, sabemos que debe empezar con un dígito entre cuatro y siete, porque en esas decenas se moverá la altura razonable. Luego le sigue una ' y luego 1 o 2 dígitos con "
+```{r}
+patron <- "^[4-7]'\\d{1,2}\"$"
+str_subset(reported_heights$height, patron)
+length(str_subset(reported_heights$height, patron))
+```
+
+#### Buscar y reemplazar con regex
+
+De los más de 200 problemas que teníamos, solo 14 coincidieron con ese patrón. Esto se debe a la variabilidad entre patrones y dentro del mismo patrón. Por ejemplo, muchos estudiantes escribieron "inches"
+
+```{r}
+str_subset(reported_heights$height, "inches")
+```
+
+Una aproximación, es que cambiemos el patrón, de tal forma que inicie con los dígitos, luego la ' y finalmente los 1 o 2 dígitos: 
+
+```{r}
+patron2 <- "^[4-7]'\\d{1,2}$"
+str_subset(reported_heights$height, patron2)
+```
+
+Ahora tenemos 24 coincidencias. 
+
+Ahora, si reemplazamos las palabras "feet" por ' e "inches" por ", tendremos muchas más coincidencias. 
+
+```{r}
+problemas <- reported_heights %>% filter(no_pulgadas(height))%>%.$height
+reported_heights$height %>% str_replace("feet|ft|foot", "'")%>%
+  str_replace("inches|in|''|\"","")%>%
+  str_detect(patron2)%>%
+  sum()
+```
+
+Aquí tenemos 48, pero muchos siguen sin funcionar. vamos a considerar los espacios que hay entre pies y pulgadas y vamos a agregarlo a regex mediante el caracter "\\s"
+
+```{r}
+patron3 <- "^[4-7]'\\s\\d{1,2}\"$"
+str_subset(problemas, patron3)
+```
+Pero no necesitamos hacer dos patrones regex, sólo usamos cuantificadores para esto también. Podemos pedirle escribir una regex que requiera 0 o más instancias de un caracter, y eso se hace mediante el asterisco *.
+
+Podemos entonces mejorar nuestro patrón solicitando 0 o más instancias del caracter espacio antes y después del símbolo de pies: 
+
+```{r}
+patron4 <- "^[4-7]\\s*'\\s*\\d{1,2}$"
+str_subset(problemas, patron4)
+```
+
+
+Ahora mejoró mucho más. Quizá lo haga mucho mejor después de reemplazar palabras: 
+
+```{r}
+reported_heights$height %>% str_replace("feet|ft|foot", "'")%>%
+  str_replace("inches|in|''|\"","")%>%
+  str_detect(patron4)%>%
+  sum()
+```
+Ahora tenemos 53 coincidencias. 
+
+Hay cuantificadores similares. 
+? <- 0 o 1 instancia.
++ <- 1 o más instancias. 
+
+
+Se podría decir que ahora tenemos abordado el primer grupo, vamos a pasar al segundo. 
+
+#### Grupos con regex
+
+El segundo grupos de problemas estaba en la forma x.y, x,y o x y. 
+Queremos cambiarlos todos para que sigan el formato x'y, pero no podemos simplemente buscar y reemplazar porque estaríamos cambiando datos no problemáticos como 65.5 pulgadas. 
+La estrategia será buscar un patrón muy específico, que asegure que los pies y las pulgadas se hayan registrado, de manera que se puedan reemplazar las coincidencias. 
+Los grupos en regex son muy poderosos para hayar coincidencias y reemplazarlas. Los grupos no afectan el patrón per se, en su lugar, ofrecen herramientas para identificar partes específicas del patrón, de manera que podamos extraerlo. 
+
+Emepecemos con un patrón sin grupos: 
+
+```{r}
+patron_sin_grupos <- "^[4-7],\\d*$"
+reported_heights$height%>%str_subset(patron_sin_grupos)
+```
+
+Este patrón sin grupos, selecciona entradas que empiecen por un solo dígito, entre 4 y 7, luego sigan con una coma y continúa con cualquier cantidad de dígitos, terminando en estos.
+
+Queremos extraer los dígitos de forma que formemos una nueva versión usando un comilla sencilla. Formemos grupos: 
+
+```{r}
+patron_con_grupos <- "^([4-7]),(\\d*)$"
+reported_heights$height%>%str_subset(patron_con_grupos)
+```
+
+Nótese que encerramos entre paréntesis la parte que queremos conservar, la parte que se quiere extraer. 
+Nótese que los paréntesis no afectaron las coincidencias, sólo permitieron señalar lo que queremos capturar en el grupo. 
+
+Miremos dos funciones adicionales: 
+
+```{r}
+reported_heights$height%>%str_extract(patron_con_grupos)
+reported_heights$height%>%str_match(patron_con_grupos)
+```
+Estas funciones devuelven un objeto del mismo tamaño (extract) con datos nulos para cuando no hay coincidencias. La otra (match) devuelve una matriz con varias columnas: la primera es el patrón que coincide y las otras son cada uno de los grupos que coinciden. 
+
+##### Referirse a los grupos
+Un aspecto muy útil de los grupos es que, a la hora de hacer algún reemplazo, podemos referirnos a ellos. Por ejemplo, si tengo dos grupos: "^([4-7]),(\\d*)$" y luego quiero referirme a ellos, sólo tengo que usar dos backslash y el número. El grupo ([4-7]) será representado por \\1 y el grupo (\\d*) será representado por \\2. Miremos un ejemplo: 
+
+```{r}
+patrón_con_grupos <- "^([4-7]),(\\d*)$"
+si <- c("5,9", "5,11", "6,", "6,1")
+no <- c("5'9", ",", "2,8", "6.1.1")
+s <- c(si, no)
+str_replace(s, patron_con_grupos, "\\1'\\2")
+```
+
+Nótese que reemplazo las entradas del grupo sí, y que los \\i sirvieron para referrirse a los grupos. 
+
+Ahora podemos adaptar este patrón a las alturas: 
+
+```{r}
+patron_con_grupos2 <- "^([4-7])\\s*[,\\.\\s]\\s*(\\d*)$" # empieza con un dígito entre 4 y 7, luego sigue con 0 o varios espacios, luego hay una coma, un punto o un espacio, luego viene otro espacio, y luego 0 o varios dígitos. 
+str_subset(reported_heights$height, patron_con_grupos2)
+#reported_heights$height %>% str_replace(patron_con_grupos2, "\\1'\\2")
+```
+Aquí tenemos un montón de coincidencias. Ahora reemplacemos: 
+```{r}
+patron_con_grupos2 <- "^([4-7])\\S*[,\\.\\s](\\d*)$"
+#str_subset(reported_heights$height, patron_con_grupos2)
+reported_heights$height %>% str_replace(patron_con_grupos2, "\\1'\\2")
+```
+
+### Mejorando el proceso: 
+
+Volvamos con la función que nos permite identificar aquellos valores problemáticos: 
+
+```{r}
+no_pulgadas_o_cms <- function(x, bajo = 50, alto = 84){
+  pulgadas <- suppressWarnings(as.numeric(x))
+  ind <- !is.na(pulgadas) & ((pulgadas >= bajo & pulgadas<=alto)|(pulgadas/2.54 >= bajo & pulgadas/2.54 <= alto))
+  !ind
+}
+```
+
+Primero pasamos los varloes a numérico. Aquellos que tengan un problema nos dará NA. Luego cogemos los no NA (osea, los que quedaron como numéricos) y seleccionamos también los que están entre los límites superiores e inferiores de alturas razonables. Posteriormente elegimos los que no están en estos índices. A estos los estamos llamando problemáticos y son los que nos arrojarán los datos problemáticos en el vector: 
+
+```{r}
+problemas <- reported_heights$height[no_pulgadas_o_cms(reported_heights$height)]
+#problemas <- reported_heights %>% filter(no_pulgadas_o_cms(height))%>%.$height. Este código hace los mismo, es el que sale en el curso. 
+length(problemas)
+```
+Ahora vamos a juntar todo lo que hemos hecho arriba: 
+
+```{r}
+convertidos <- problemas %>%
+  str_replace("feet|foot|ft", "'")%>% # Convierte las cadenas de pies al símbolo '
+  str_replace("inches|in|''|\"", "")%>% #remueve los símbolos de pulgadas
+  str_replace("([4-7])\\s*[,\\.\\s+]\\s*(\\d*)$", "\\1'\\2") # cambia el formato
+
+head(convertidos)
+```
+
+Ahora, podemos aplicar un nuevo patrón para convertir estos datos (la mayoría en el formato x'y"), a un formato x'y
+
+```{r}
+patron <- "^([4-7])\\s*'\\s*\\d{1,2}$"
+indices <- str_detect(convertidos, patron) ## me arroja booleanos para incluir o no indices. 
+mean(indices) #me arroja la proporción de convertidos. 
+```
+
+Ya tengo el 61.5% convertidos. 
+
+Ahora examinemos los que aún están con problemas: 
+
+```{r}
+problemas[!indices]
+```
+
+Los problemas que tenemos aquí son varios: 
+1. Algunos estudiantes sólo ingresaron los pies, probablemente porque medían exactamente esto. 
+2. Otros estudiantes ingresaron decimales en las pulgadas. 
+3. Algunos datos están en metros, y otros usan decimales europeos. 
+4. Algunos ingresaron cm. 
+5. Un estudiante ingresó únicamente cadenas. 
+
+### Separar con regex. 
+
+Hasta aquí sabemos identificar, sin embargo, queremos, ademas, extraer y guardar los valores, de manera que podemos convertirlos a pulgadas cuando lo necesitemos. 
+
+```{r}
+s <- c("5'10", "6'1")
+tab <- data.frame(x=s)
+tab
+```
+
+Podríamos separarlo, así: 
+```{r}
+tab %>% separate(x, c("Pies", "Pulgadas"), sep = "'")
+```
+
+La función extract del paquete tidyr nos permite estraer los valores deseados. 
+
+```{r}
+tab %>% extract(x, c("Pies", "Pulgadas"), regex = "(\\d)'(\\d{1,2})")
+```
+
+Nótese que extrac nos permite separar de acuerdo con los grupos especificados con regex. Esto hace más flexible el proceso de extracción. 
+
+Otro ejemplo: 
+
+```{r}
+s <- c("5'10", "6'1\"", "5'8inches" )
+tab <- data.frame(x = s)
+
+tab %>% extract(x, c("Pulgadas", "Pies"), regex = "(\\d)'(\\d{1,2})")
+
+```
+
+Si hubiéramos hecho lo anterior con separate, hubiera ocurrido esto: 
+```{r}
+tab %>% separate(x, c("Pies", "Pulgadas"), sep = "'", fill = "right")
+```
+
+Volvamos a nuestro problema. Tenemos esto: 
+
+
+```{r}
+problemas[!indices]
+```
+
+Los problemas que tenemos aquí son varios: 
+1. Algunos estudiantes sólo ingresaron los pies, probablemente porque medían exactamente esto. 
+2. Otros estudiantes ingresaron decimales en las pulgadas. 
+3. Algunos datos están en metros, y otros usan decimales europeos. 
+4. Algunos ingresaron cm. 
+5. Un estudiante ingresó únicamente cadenas.
+
+Podemos reemplazar agregar 0 a los pies redondos, con el fin de que se ajuste a nuestro patrón: 
+
+```{r}
+problemas[!indices]%>%str_replace("(^[4-7]$)", "\\1'0") -> problemas1
+problemas1
+```
+
+Nos acercamos a la solución, pero aún hay algunas entradas, como la 14, que no se convirtió debido a que tenía el símbolo ', el cual no fue considerado en el regex: 
+
+```{r}
+problemas1 %>% str_replace("(^[4-7]'?$)", "\\1'0")-> problemas2
+
+problemas2
+```
+
+Vamos con el problema 2. Algunos estudiantes ingresaron decimales europeos en las pulgadas. 
+
+```{r}
+problemas2 %>% str_replace("^([4-7])\\s*'\\s*(\\d+\\.?\\d*)'+$", "\\1'\\2") -> problemas3
+problemas3
+
+```
+
+Ahora tenemos el problema de que algunos datos están en cms. Podemos seleccionarlos eligiendo aquellos que empiezan por 1 y tienen tres dígitos: 
+
+```{r}
+problemas3 %>% str_subset("^(1\\d{2}(\\.?\\d)?)\\s*[cm]*$")
+problemas3 %>% str_subset("^(1\\d{2}(\\.?\\d)?)\\s*[cm]*$")%>% str_replace("^(1\\d{2}(\\.?\\d)?)\\s*[cm]*$", "\\1")
+problemas3 %>% str_replace("^(1\\d{2}(\\.?\\d)?)\\s*[cm]*$", "\\1") -> problemas4
+problemas4
+```
+
+otro problema, es que algunos están en metros y decimales; por ejemplo, 1,7
+
+```{r}
+problemas4 %>% str_subset("^1[,.]")
+```
+ Luego veremos como transformarlo en numéricos y multiplicalos para que queden en pulgadas. 
+ 
+ Para las entradas que están en palabras vamos a crear una función extensa: 
+ 
+```{r}
+pal_a_num <- function(s){
+  str_to_lower(s) %>%  
+    str_replace_all("zero", "0") %>%
+    str_replace_all("one", "1") %>%
+    str_replace_all("two", "2") %>%
+    str_replace_all("three", "3") %>%
+    str_replace_all("four", "4") %>%
+    str_replace_all("five", "5") %>%
+    str_replace_all("six", "6") %>%
+    str_replace_all("seven", "7") %>%
+    str_replace_all("eight", "8") %>%
+    str_replace_all("nine", "9") %>%
+    str_replace_all("ten", "10") %>%
+    str_replace_all("eleven", "11")
+}
+```
+ 
+ 
+ Ya llevamos varias conversiones, así que vamos a convertirlas en una función: 
+ 
+```{r}
+convertir_formato <- function(s){
+  s %>%
+    str_replace("feet|foot|ft", "'") %>% #convert feet symbols to '
+    str_replace_all("inches|in|''|\"|cm|and", "") %>%  #remove inches and other symbols
+    str_replace("^([4-7])\\s*[,\\.\\s+]\\s*(\\d*)$", "\\1'\\2") %>% #change x.y, x,y x y
+    str_replace("^([56])'?$", "\\1'0") %>% #add 0 when to 5 or 6
+    str_replace("^([12])\\s*,\\s*(\\d*)$", "\\1\\.\\2") %>% #change european decimal
+    str_trim() #remove extra space
+}
+```
+ 
+
+### Poniéndolo todo junto. 
+
+Ahora podemos preparar la base de datos: 
+
+```{r}
+patron <- "^([4-7])\\s*'\\s*(\\d+\\.?\\d*)$"
+pequeño <- 50
+grande <- 84
+
+nuevas_alturas <- reported_heights %>% 
+  mutate (original = height,
+          altura = pal_a_num(height) %>% convertir_formato())%>%
+  extract(altura, c("pies", "pulgada"), regex = patron, remove = FALSE)%>%
+  mutate_at(c("altura", "pies", "pulgada"), as.numeric)%>%
+  mutate (supuesto = 12*pies + pulgada)%>%
+  mutate (altura = case_when(
+    !is.na(altura) & between(altura, pequeño, grande) ~ altura, 
+    !is.na(altura) & between(altura/2.54, pequeño, grande) ~ altura/2.54,
+    !is.na(altura) & between(altura*100/2.54, pequeño, grande) ~ altura*100/2.54,
+    !is.na(supuesto) & pulgada < 12 & between (supuesto, pequeño, grande) ~ supuesto,
+    TRUE ~ as.numeric(NA)
+    
+  ))%>%
+select(-supuesto)
+
+```
+Aquí tenemos nuestra base de datos; de los 200 registros problemáticos sólo quedaron 45
+
+```{r}
+original <-reported_heights%>%mutate(altura = height)
+nuevas_alturas %>% 
+  filter(no_pulgadas_o_cms(original))%>%
+  select(original, altura)%>%
+  arrange(altura)
+
+sum(is.na(nuevas_alturas$altura))
+
+
+```
+
+## Partir cadenas
+Esta es otra tarea importante en la preparación de datos. 
+
+Supongamos que no tenemos una función como leer csv, y en cambio tenemos que leerla línea por líneas
+```{r}
+filename<- "murders_descargado.csv"
+lines <- readLines(filename)
+lines
+```
+
+Queremos extraer los valores que están separados por comas en cada cadena en el vector. 
+El comando str_split hace eso: 
+```{r}
+head(str_split(lines, ","))
+```
+
+La primera entrada tiene el nombre de las columnas, así que podemos convertirlo en los nombres de un nuevo dataframe: 
+
+```{r}
+x <- str_split(lines, ",")
+nombres_columnas <- x[[1]]
+x<- x[-1] #retiramos la primera fila. 
+```
+
+Si queremos extraer el primer elemento de cada lista, usamos la función map, para aplicar a cada elemento, una función que permite extraer el primer elemento de la lista: 
+
+```{r}
+map(x, function(y) y[1]) %>% head()
+```
+
+Sin embargo, esta tarea es super común, así que purr nos la deja hacer simplemente poniendo un entero que señale qué elemento de la lista queremos: 
+```{r}
+map(x, 1)%>% head()
+```
+
+Si queremos obligar a map para que retenga el elemento, y no la lista, podemos usar map_chr o map_int. 
+
+```{r}
+map_chr(x, 1)
+```
+
+Con esto en mente, ya podemos crear nuestro dataframe: 
+
+```{r}
+asesinatos_us <- data.frame(
+                            estado = map_chr(x, 1), 
+                            abreviatura = map_chr(x,2), 
+                            región = map_chr(x, 3),
+                            población = map_chr(x, 4),
+                            total = map_chr(x,5)) %>%
+  mutate(across(.fns = parse_guess))
+asesinatos_us
+```
+
+Esto se podría lograr incluso de manera más efeciente con otras funciones incluidas en purr: 
+```{r}
+asesin <- x %>% 
+  transpose()%>% #transpone las listas
+  map(~parse_guess(unlist(.)))%>% # a través de cada lista hace el parsing y deslista. Quedan cinco listas, cada una representando una variable. 
+  setNames(nombres_columnas)%>%
+  as.data.frame()
+asesin
+```
+
+Incluso podríamos simplificarlo mucho más, pues en la función str_split hay una función que hace todo el trabajo, simplify = TRUE
+
+```{r}
+x <- str_split(lines, ",", simplify = TRUE)
+x = x[-1,]
+x %>%as_tibble()%>%setNames(nombres_columnas)%>%mutate(across(.fns = parse_guess))
+```
+
+### extrayendo desde un pdf
+
+Para extraer desde un pdf descargamos el paquete pdftools. 
+Vamos a hacer esto y luego descargaremos el archivo. 
+
+```{r}
+library("pdftools")
+url <- "https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1510159112&file=pnas.201510159si.pdf"
+archivo <- "archivo_investigación2.pdf"
+download.file(url, archivo)
+
+txt <- pdf_text(archivo)
+
+```
+
+Este archivo me genera errores a la hora de descargar, así que lo descargué directamente en la carpeta del proyecto. 
+```{r}
+archivo <- "archivo_investigación_3.pdf"
+txt <- pdf_text(archivo)
+```
+
+El nuevo objeto creado me arroja un vector de listas, con una lista por cada página en el archivo. 
+
+Queremos la página 2, así que la convervamos: 
+
+```{r}
+base <- txt[[2]]
+```
+
+Vemos que cada línea en la página incluye filas de tablas, separadas por el símbolo \n, así que vamos a usarlo para partir las cadenas: 
+
+```{r}
+tablas_texto <- unlist(str_split(base, "\n"))
+tablas_texto
+```
+Vemos que los nombres para las variables están en las filas 3 y 5
+
+```{r}
+nombres_columnas1 <- tablas_texto[3]
+nombre_columnas2 <- tablas_texto[5]
+```
+
+Vamos a buscar generar un vector con los nombres de las columnas. Empecemos preparando nombres_columnas1
+```{r}
+nombre_columnas1 <- nombres_columnas1%>%
+  str_trim()%>% ##Quita los espacios antes o despuúes de cada línea. 
+  str_replace_all(",\\s.", "")%>% ## Quedan los tres nombres en el formato correcto
+  str_split("\\s{2,}", simplify = TRUE)
+nombre_columnas1
+```
+
+Ahora para la segunda parte de los nombres: 
+
+```{r}
+nombre_columnas2 <- nombre_columnas2 %>% 
+  str_trim()%>%
+  str_split("\\s+", simplify = TRUE)
+nombre_columnas2
+
+```
+
+Ahora juntemos ambos nombres en un solo vector: 
+
+```{r}
+nombres_temporales <- str_c(rep(nombre_columnas1, each = 3), nombre_columnas2[-1], sep = "_")
+nombres_temporales
+```
+
+Agregamos a los nombres temporales la primera columna de disciplina: 
+```{r}
+nombres <- c(nombre_columnas2[1], nombres_temporales)
+nombres
+```
+
+Ya tenemos nuestros nombres, ahora vamos a pasar todo a minúscula y a agregar guión bajo para cada espacio: 
+
+```{r}
+nombres <- nombres %>% str_to_lower()%>%str_replace_all("\\s", "_")
+nombres
+
+```
+
+Ahora estamos listos para agregar datos: 
+
+```{r}
+tablas_texto
+```
+Vemos que los datos están entre las filas 7 y 16
+```{r}
+datos_tabla <- tablas_texto[7:16]
+datos_tabla
+```
+
+Ahora posemos seguir haciendo operaciones similares: 
+
+```{r}
+datos_tabla_preparados <- datos_tabla %>% str_trim()%>% 
+  str_replace_all(",", "")%>%
+  str_replace_all("\\s{2,}", ",")%>%
+  str_replace_all("(\\d{2}\\.\\d)[ab]", "\\1" )%>%
+  str_split(",", simplify = TRUE)
+
+
+```
+
+Ya tenemos la matriz. Ahora terminemos de crear el dataframe: 
+
+```{r}
+dataframe_final <- datos_tabla_preparados %>% as_tibble()%>%set_names(nombres)%>%mutate(across(-1, .fns=parse_number))
+dataframe_final
+```
+Aquí quito la primera fila de total y lo comparo con el dataframe que hay en dslabs. 
+
+```{r}
+dataframe_final <- dataframe_final[-1,]
+dataframe_final
+research_funding_rates
+```
+
+Vemos que es igual. Sólo hay que pasarlo a dataframe para que sea igual.
+
+```{r}
+identical(as.data.frame(dataframe_final), research_funding_rates)
+```
+
+## Fechas y horas. 
+
+A menudo trabajamos con vectores numéricos, de caracter y lógicos. Sin embargo, también es frecuente encontrarse con variables que son fechas. 
+Aunque podemos representar fechas con cadenas (Juno 6 de 2020). 
+
+Por otro lado, podemos referirnos a fechas con números si los comparamos con una fecha de referencia (**epoch**). 
+Los lenguajes de programación usualmente usan el **1 de enero de 1970 como epoch**, así que Noviembre 2 de 2017 es el día 17204. Se puede ver la hora en epoch con: 
+```{r}
+as.numeric(Sys.time())
+```
+
+Esa fecha considera días, horas, minutos y segundos. 
+
+Representar la fecha en epoch es comprensible para el ser humano, comparado con 06 de julio de 2022. 
+
+Por esta razón tenemos un tipo de datos únicamente para fechas y horas. 
+
+Tenemos un ejemplo de fechas en los datos de encuestas: 
+```{r}
+library(dslabs)
+data("polls_us_election_2016")
+polls_us_election_2016$startdate %>% head()
+polls_us_election_2016$startdate %>% class()
+```
+
+Quá pasaría si los convertimos en números?
+
+```{r}
+polls_us_election_2016$startdate %>% as.numeric() %>% head()
+```
+
+Las funciones de plotting como las de ggplot tienen en cuenta las fechas, asi que, por ejemplo, usa una representación numérica para decidir la ubicación de los puntos, pero etiqueta con la fecha. 
+```{r}
+library(ggplot2)
+polls_us_election_2016 %>% filter(pollster == "Ipsos" & state == "U.S.") %>% 
+  ggplot(aes(startdate, rawpoll_trump))+
+  geom_line()
+```
+Debido a que es común el trabajo con fechas, tidyverse incluye el paquete lubridate, el cual permite trabajar más fácilmente con estas. 
+Miremos algunos ejemplos: 
+
+```{r}
+library(lubridate)
+fechas <- sample(polls_us_election_2016$startdate, 10) %>% sort()
+fechas
+```
+
+las funciones date, month, day y tear extraen esos datos: 
+
+```{r}
+day (fechas)
+year(fechas)
+month(fechas)
+date (fechas)
+hours(fechas)
+
+```
+
+podemos convertirlo en un dataframe: 
+
+```{r}
+data.frame(fecha = date(fechas),
+          Años = year(fechas),
+          Meses = month(fechas, label = TRUE, abbr = FALSE),
+          Dias = day(fechas),
+          Horas = hours(fechas))
+          
+```
+Otro conjunto de funciones útiles son los parsers, que convierten cadenas en fechas. 
+
+Por ejemplo: 
+```{r}
+fechas_cadena <- c("2 de agosto de 2021", "23 julio de 2023", "4 de enero de 2015", "28/08/1986", "12 dec 2004")
+dmy(fechas_cadena)
+```
+
+Sólo es necesario analizar el patrón para identificar en qué orden están dia, mes y año, y usar dym(), dmy(), myd(), ymd() según el caso. 
+
+```{r}
+ymd("2022 julio 6")
+dmy ("6 de julio de 2022")
+mdy ("julio 6 de 2022")
+```
+
+El formato preferido para las fechas es el año con los cuatro dígitos, el mes con los dos dígitos y los días, con guión a este se le llama **formato ISO 8601**. ASí : 2022-07-06. Este es el formato en el que lo devuelve R. 
+
+Frente a las fechas es necesario tener en cuenta que, de acuerdo con el formato, pueden ser confusas. Por ejemplo: 2022/06/07 puede ser 6 de julio de 2022 o 7 de junio de 2022. Es necesario analizar todo el vector para saber cuál es el parser que debemos usar: 
+
+```{r}
+ydm("2022/06/07")
+ymd("2022/06/07")
+```
+
+Lubridate también ofrece funciones para trabajar con el tiempo. 
+
+```{r}
+Sys.time() # esta es de R base. 
+now() # esta es de lubridate. 
+now("GMT")
+
+```
+lubridate permite definir la zona horaria. 
+
+Se pueden ver todas las zonas horarias escribiendo la función OlsonNames()
+
+```{r}
+OlsonNames() %>% head()
+colombia <- as.data.frame(OlsonNames())[84,1]
+now(colombia)
+```
+
+lubridate también tiene funciones para extraer horas, minutos y segundos de una fecha: 
+
+```{r}
+hour(now())
+minute(now())
+second(now())
+```
+
+También funciones para hacer parsing de los tiempos: 
+
+```{r}
+hora <- "11:09:25"
+hms(hora)
+```
+
+Finalmente, hay funciones para extraer fecha y hora: 
+
+```{r}
+fecha_y_hora <- "Julio 7 de 2022, 11:10:45"
+mdy_hms(fecha_y_hora)
+```
+
+
+
+## Minería de texto. 
+
+El paquete tidytext ayuda a convertir texto libre en tablas limpias. 
+
+la función unnest_tokens() permite extraer palabras individuales o conjunto útiles de texto. 
+
+El análisis de sentimiento asocia emociones o puntajes positivo/negativo a diferentes tokens. Se puede estrear los sentimientos usando get_sentiments()
+Los léxicos más comunes para el análisis de sentimientos son **bing, afinn, nrc y loghran**
+
+
+Muchos análisis empiezan con texto. En estos, los datos brutos son texto libre (comentarios, twits, blogs, etc)y nuestro trabajo es extraer una comprensión util de estos datos. 
+Vamos a aprender a sacar resúmenes numéricos útiles de textos, y luego aplicar técnicas de análisis y visualización útiles. 
+
+### Caso: los trinos de Trump. 
+
+Durante el 2016, el candidato Trump usó su cuenta de twitter como medio de comunicación con votantes potenciales. E Todd Varziri trinó que cada tweet no hiperbólico de Trump era desde un iphone, y que cada tweet hiperbólico era de un android. El científico de datos David Robinsón hizo un análisis para determinar si los datos soportaban esa afirmación. Vamos a hacer lo mismo. 
+http://varianceexplained.org/r/trump-tweets/ 
+Este libro es bueno para profundizar en minería de textos con R: 
+https://www.tidytextmining.com/
+Usaremos las siguientes librerías: 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+library(scales)
+set.seed(1)
+```
+
+Si se quiere trabajar con twitter a través de su API, se puede descargar la librería rtweet. Aquí no lo haremos pero igual la podemos cargar: 
+```{r}
+library(rtweet)
+```
+Como no usaremos la librería, descargaremos los datos de la página https://www.thetrumparchive.com/
+
+```{r}
+url <- 'https://drive.google.com/file/d/16wm-2NTKohhcA26w-kaWfhLIGwl_oX95/view'
+
+
+trump_tweets <- map(2009:2017, ~sprintf(url, .x)) %>%
+  map_df(jsonlite::fromJSON, simplifyDataFrame = TRUE) %>%
+  filter(!is_retweet & !str_detect(text, '^"')) %>%
+  mutate(created_at = parse_date_time(created_at, orders = "a b! d! H!:M!:S! z!* Y!", tz="EST"))
+```
+
+En el curso no se explica qué se hace con este códito, pero voy a suponer que crea un objeto trup:twwets, Usa la función map para imprimir con formato, desde la url y algún objeto .x, lo que hay entre los años 2009 y 2017. Luego aplica la función josonlite::fromJSON para convertir datos JSON en un objeto R y simplificar el dataframe. luego crea una columna "Creado en" analizando fecha y hora, especificando el orden y la zona horaria. 
+Al final tenemos un dataframe con 8 columnas y 20761 observaciones. 
+```{r}
+trump_tweets
+```
+
+```{r}
+"Variables incluídas:"
+""
+names(trump_tweets)
+""
+
+"Los trinos están representados en la variable text"
+""
+head(trump_tweets$text)
+""
+"La variable source señala el dispositivo desde el cual se compuso y subió el trino"
+
+trump_tweets%>%select(source)%>%arrange(desc(source))
+```
+
+
+Podemos uara la función extract() para remover la parte Twitter de la fuente, y filtrar los retweets. 
+
+```{r}
+
+
+trump_tweets %>% 
+  extract(source, "source", "Twitter for (.*)") %>%
+  count(source)
+```
+
+Ahora vamos a crear una base con los trinos en campaña. Para eso extraemos el source, luego filtramos aquellos cuyo source sea de Android y Iphone y se hayan creado en las fechas de campaña. Luego filtramos aqueñoos que no son retweet y los ordenamos por fecha de creación: 
+
+```{r}
+campaign_tweets <- trump_tweets %>% 
+  extract(source, "source", "Twitter for (.*)") %>%
+  filter(source %in% c("Android", "iPhone") &
+           created_at >= ymd("2015-06-17") & 
+           created_at < ymd("2016-11-08")) %>%
+  filter(!is_retweet) %>%
+  arrange(created_at)
+```
+
+
+Luego, visualizamos los datos para explorar la posibilidad de que dos grupos diferentes hayan trinado desde los dispositivos, por cada trino extraeremos la hora en la costa este y luego la proporción de trinos publicados cada hora para cada dispositivo: 
+
+```{r}
+campaign_tweets %>%
+  mutate(hour = hour(with_tz(created_at, "EST"))) %>%
+  count(source, hour) %>%
+  group_by(source) %>%
+  mutate(percent = n / sum(n)) %>%
+  ungroup %>%
+  ggplot(aes(hour, percent, color = source)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Hour of day (EST)",
+       y = "% of tweets",
+       color = "")
+```
+
+Parece claro un patrón diferente entre android y iphone. Las horas pico de Android parecen ubicarse en las primeras horas de la mañana, mientras las de iphon se dan en la tarde. Por lo tanto se asume que dos diferentes entidades están usando estos dos dispositivos. Vamos a investigar cómo difiern estos tweets. 
+
+### texto como datos. 
+El paquete tidytext nos ayuda a convertir texto libre en tablas limpias. Tenerlo en tablas facilita la visualización y aplicación de técnicas estadísticas. 
+
+```{r}
+library(tidytext)
+```
+
+La función más importante aquí es unnest_tokens(). Un token se refiere a las unidades que estamos considerando para cada punto de datos. 
+El token más común son las palabras, pero también pueden ser caracteres únicos o ngramas, o sentencias o líneas de texto, o patrones definidos con regex. 
+Las funciones tomarán un vector de cadenas y extreaerán tokens, de camera que cada uno tenga una fila en la nueva tabla. Por ejemplo: 
+
+```{r}
+example <- data_frame(line = c(1, 2, 3, 4),
+                      text = c("Roses are red,", "Violets are blue,", "Sugar is sweet,", "And so are you."))
+example
+
+example %>% unnest_tokens(word, text)
+```
+
+Miremos un pequeño ejemplo con un trino específico: 
+
+```{r}
+i <- 3008
+campaign_tweets$text[i]
+
+campaign_tweets[i,]%>%unnest_tokens(word, text) %>% select(word)
+```
+
+La función intenta convertir tokens en palabras y limpia caracteres importantes para twitter como # o @. Un token en twiter no es lo mismo que en idioma regular, así que en vez de usar el token por defecto, definimos una regex que capture el caracter de twitter. 
+
+```{r}
+pattern <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))" 
+```
+
+podemos uara la función unnest_token() con la opción regex para extraer apropiadamente hashtagas y menciones: 
+
+```{r}
+campaign_tweets[i,]%>%unnest_tokens(word, text, token = "regex", pattern = pattern) %>% select(word)
+```
+
+
+También queremos eliminar los links a imágenes. 
+
+```{r}
+campaign_tweets[i,] %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  select(word)
+```
+
+Un resultado similar se alancanza con el tkon tweets
+
+```{r}
+campaign_tweets[i,]%>%unnest_tokens(word, text, token = "tweets") %>% select(word)
+```
+
+Ahora estamos listos para extraer todas las palabras de los trinos: 
+
+```{r}
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) 
+tweet_words
+```
+Tenemos 68790 palabras. Ahora respondamos a la pregunta ¿Cuál es la palabra más usada?
+
+```{r}
+tweet_words %>% 
+  count(word) %>%
+  arrange(desc(n))
+
+```
+
+Estas palabras no suelen llevar significado. el paquete tidytext tiene una base de datos de estas palabras, a las que se les llama stop words (palabras vacías en español) en minería de texto. Hay algunas aproximaciones al español, como el paquete como la función stopwords del paquete tm, con su argumento ("es"), pero este es un español de españa. 
+
+```{r}
+stop_words
+stopwords("es")
+```
+
+Podemos filtrar aquellas palabras que no estén en stop_words()
+
+```{r}
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  filter(!word %in% stop_words$word ) 
+
+tweet_words
+```
+
+Ahora tenemos un top 10 más informativo: 
+
+```{r}
+tweet_words %>% 
+  count(word) %>%
+  top_n(10, n) %>%
+  mutate(word = reorder(word, n)) %>%
+  arrange(desc(n))
+```
+
+Es necesario tener en cuenta que algunos tokens no son muy útiles, por ejemplo, algunos son números, otros tienen comillas, así que queremos eliminar estas características. 
+
+```{r}
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  filter(!word %in% stop_words$word &
+           !str_detect(word, "^\\d+$")) %>%
+  mutate(word = str_replace(word, "^'", ""))
+
+tweet_words
+```
+
+Ahora tenemos un dataframe con todas las palabras, y con el dispositivo desde el cual fue enviado además de otros datos como la fecha de creación. 
+
+Para cada palabra queremos saber si es más probable que venga de android o iphone. vamos a calcular el odds ratio para esto. 
+
+```{r}
+android_iphone_or <- tweet_words %>% #Crea un objeto llamado android_iphon_or
+  count(word, source) %>% # Cuenta las palabras y la fuente. 
+  spread(source, n, fill = 0) %>% # crea una columna diferente para android y otra para iphone. 
+  mutate(or = (Android + 0.5) / (sum(Android) - Android + 0.5) / #crea una columna or con las odds ratio para android. 
+           ( (iPhone + 0.5) / (sum(iPhone) - iPhone + 0.5)))
+
+android_iphone_or %>% arrange(desc(or)) # ordena descendentemente. 
+android_iphone_or %>% arrange(or)# ordena ascendentemente. 
+```
+Debido a que algunas de estas palabras son demasiado infrecuentes, podemos hacer un filtro para eliminarlas. 
+
+```{r}
+android_iphone_or %>% filter(Android+iPhone > 100) %>%
+  arrange(desc(or))
+
+android_iphone_or %>% filter(Android+iPhone > 100) %>%
+  arrange(or)
+```
+Se puede ver que algunas palabras son más frecuentes en un dispositivo que en otro. Pero la afirmación del twitero es que el android es más hiperbólico. Es difícil calcular el grado de hipérbole, pero se pueden analizar sentimiento más básico. 
+
+El primer paso es asignar sentimientos a cada palabra. El paquete de tidytext incluye varios sentimientos asociados a palabras: 
+
+```{r}
+sentiments
+```
+
+hay otros lexicos que dan diferentes sentimiento, por ejemplo, el lixicon bing divide entre positivo y negativo: 
+
+```{r}
+get_sentiments()
+```
+
+El affin asigna puntajes entre -5 y +5
+```{r}
+library(textdata1)
+get_sentiments("afinn")
+```
+
+también tenemos loughran y nrc
+
+```{r}
+get_sentiments("loughran")
+```
+El lexico nrc ofrece varias emociones para cada palabra. 
+```{r}
+get_sentiments("nrc")
+```
+
+Para este análisis estamos interesados en diferentes sentimientos, así que usaremos el nrc. 
+
+```{r}
+nrc <- get_sentiments("nrc") %>%
+  select(word, sentiment)
+```
+
+Podemos combinar nrc y las palabras de los tweets usando inner_join, lo que dejará sólo las palabras asociadas con un sentimiento: 
+
+```{r}
+tweet_words %>% inner_join(nrc, by = "word") %>% 
+  select(source, word, sentiment)
+```
+
+Ahora estamos listos para llevar a cabo el análisis cuantitativo con cada sentimiento. Esto puede ser complejo debido a que cada trino puede tener varios sentimiento, asi que para propósitos ilustrativos llevaremos a cabo un análisis más simple: contaremos y compararemos la frecuenda con la que cada sentimiento ocurre en cada dispositivo: 
+
+```{r}
+sentiment_counts <- tweet_words %>%
+  left_join(nrc, by = "word") %>%
+  count(source, sentiment) %>%
+  spread(source, n) %>%
+  mutate(sentiment = replace_na(sentiment, replace = "none"))
+sentiment_counts
+```
+
+Debido a que más palabras fueron usadas en Android que in iphon: 
+
+```{r}
+tweet_words %>% group_by(source) %>% summarize(n = n())
+```
+
+Para cada sentimiento podemos calcular el odds ratio de estar en el dispositivo: la proporción de palabras con el sentimiento versos la proporción de palabras: 
+
+```{r}
+sentiment_counts %>%
+  mutate(Android = Android / (sum(Android) - Android) , 
+         iPhone = iPhone / (sum(iPhone) - iPhone), 
+         or = Android/iPhone) %>%
+  arrange(desc(or))
+```
+Vemos que son más probables las palabras negativas desde Android. ¿Son estadísticamente significativas?
+
+```{r}
+library(broom)
+log_or <- sentiment_counts %>%
+  mutate( log_or = log( (Android / (sum(Android) - Android)) / (iPhone / (sum(iPhone) - iPhone))),
+          se = sqrt( 1/Android + 1/(sum(Android) - Android) + 1/iPhone + 1/(sum(iPhone) - iPhone)),
+          conf.low = log_or - qnorm(0.975)*se,
+          conf.high = log_or + qnorm(0.975)*se) %>%
+  arrange(desc(log_or))
+  
+log_or
+```
+Las más significativas son las negativas. Esto quiere decir que sí es más probable que emociones negativas salgan de Android, pero no que positivas salgan de iphone. Esto quiere decir que los trinos desde iphone eran más neutrales, y por lo tanto es posible que no hiperbólicos, como lo afirmaba el twitero. 
+Miremos una representación gráficas: 
+
+```{r}
+log_or %>%
+  mutate(sentiment = reorder(sentiment, log_or),) %>%
+  ggplot(aes(x = sentiment, ymin = conf.low, ymax = conf.high)) +
+  geom_errorbar() +
+  geom_point(aes(sentiment, log_or)) +
+  ylab("Log odds ratio for association between Android and sentiment") +
+  coord_flip() 
+```
+
+Si estamos interesados en explorar cuáles palabras específicas dan lugar a esta diferencia, podemos volver al objetos android_iphone_or: 
+```{r}
+android_iphone_or %>% inner_join(nrc) %>%
+  filter(sentiment == "fear" & Android + iPhone > 10) %>%
+  arrange(desc(or))
+```
+Podemos hacer un gráfico: 
+
+```{r}
+android_iphone_or %>% inner_join(nrc, by = "word") %>%
+  mutate(sentiment = factor(sentiment, levels = log_or$sentiment)) %>%
+  mutate(log_or = log(or)) %>%
+  filter(Android + iPhone > 10 & abs(log_or)>1) %>%
+  mutate(word = reorder(word, log_or)) %>%
+  ggplot(aes(word, log_or, fill = log_or < 0)) +
+  facet_wrap(~sentiment, scales = "free_x", nrow = 2) + 
+  geom_bar(stat="identity", show.legend = FALSE) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+```
+
